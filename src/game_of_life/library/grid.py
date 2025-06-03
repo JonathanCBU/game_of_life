@@ -69,25 +69,35 @@ class Grid:
 
         return wormholes
 
-    def _get_neighbors(self, row: int, col: int) -> list[tuple[int, int]]:
-        """Get cell neighbors based on board dimensions."""
-        neighbors = []
-        for dr in [-1, 0, 1]:
-            for dc in [-1, 0, 1]:
-                if dr == 0 and dc == 0:
-                    continue
-                nr, nc = row + dr, col + dc
-                if 0 <= nr < self.height and 0 <= nc < self.width:
-                    neighbors.append((nr, nc))
-        return neighbors
-
     def _map_neighbors(self) -> dict[tuple[int, int], list[tuple[int, int]]]:
         """Create coordinate map of all cell neighbors."""
+
+        """
+        NOTE:
+            - Wormholes are effectively 'folding' the board
+            - Vertical wormholes bring their top/bottom neighbors
+            - Horizontal wormholes bring their left/right neighbors
+            - There are no diagonal wormholes so cells next to wormholes will have their diagonals changed
+        """
         neighbor_map = {}
         for row in range(self.height):
             for col in range(self.width):
-                default_neighbors = self._get_neighbors(row, col)
-                neighbor_map[(row, col)] = default_neighbors
+                actual_neighbors = []
+                for row_delta in [-1, 0, 1]:
+                    for col_delta in [-1, 0, 1]:
+                        if row_delta == col_delta == 0:
+                            # TODO: handle if this is a wormhole entrance itself
+                            continue
+                        # check each cell in a 3x3 grid including current cell
+                        row_neighbor = row + row_delta
+                        col_neighbor = col + col_delta
+                        if (
+                            0 <= row_neighbor <= self.height
+                            and 0 <= col_neighbor <= self.width
+                        ):
+                            # only bother checking if neighbor coords are within board
+                            actual_neighbors.append((row_neighbor, col_neighbor))
+                neighbor_map[(row, col)] = actual_neighbors
         return neighbor_map
 
     def _apply_wormhole_transform(
