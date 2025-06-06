@@ -2,13 +2,11 @@
 name = "game_of_life"
 version = "0.1.0"
 description = "Conway's Game of Life with twists"
-authors = [
-    {name = "Jonathan Cook", email = "jcookbme@gmail.com"},
-]
+authors = [{ name = "Jonathan Cook", email = "jcookbme@gmail.com" }]
 dependencies = ["numpy>=2.2.6", "pillow>=11.2.1"]
 requires-python = ">=3.13"
 readme = "README.md"
-license = {text = "MIT"}
+license = { text = "MIT" }
 
 [build-system]
 requires = ["pdm-backend"]
@@ -19,8 +17,4 @@ build-backend = "pdm.backend"
 distribution = true
 
 [dependency-groups]
-test = [
-    "pytest>=8.4.0",
-    "ipython>=9.3.0",
-    "ruff>=0.11.12",
-]
+test = ["ruff>=0.11.12"]

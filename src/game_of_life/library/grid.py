@@ -2,83 +2,64 @@
 
 from PIL import Image
 import numpy as np
-from collections import defaultdict
 
 
 class Grid:
     """Collection of cells that make up an image."""
 
-    def __init__(self, starting_board_file: str, v_wormholes: str, h_wormholes: str):
+    def __init__(self, starting_board_file: str):
         """Parse board from starting position and v/h wormholes."""
         # Initial board state
         self.starting_board_file = starting_board_file
         self.img = Image.open(starting_board_file).convert("RGB")
         self.width, self.height = self.img.size
         self.data = np.asarray(self.img, dtype="int32")
-        self.board = self._get_board()
-
-        # wormholes
-        self.v_wh_img = Image.open(v_wormholes).convert("RGB")
-        self.v_wormholes = self._parse_wormholes(
-            pixels=np.asarray(self.v_wh_img, dtype="int32")
-        )
-        self.h_wh_img = Image.open(h_wormholes).convert("RGB")
-        self.h_wormholes = self._parse_wormholes(
-            pixels=np.asarray(self.h_wh_img, dtype="int32")
-        )
+        self.default_board = self._get_board()
+        self.board = self.default_board
 
         # neighbor mapping
-        self.neighbor_map = self._map_neighbors()
+        self.default_neighbor_map = self._map_neighbors()
+        self.neighbor_map = self.default_neighbor_map
+
+        # debug
+        self._debug = False
+        self.frames = [self.board]
+
+    @property
+    def debug(self) -> bool:
+        """Debug mode."""
+        return self._debug
+
+    @debug.setter
+    def debug(self, dbg: bool = False) -> None:
+        """Debug mode setter."""
+        if not isinstance(dbg, bool):
+            raise ValueError("Debug must be boolean")
+        self._debug = dbg
+
+    def reset(self) -> None:
+        """Reset board to starting position."""
+        self.board = self.default_board
+
+    def validate_coords(self, row: int, col: int) -> bool:
+        """Validate a set of coordinates is within the bounds of this board."""
+        return 0 <= row < self.height and 0 <= col < self.width
 
     def _get_board(self) -> list[list[int]]:
         """Create bitmap from initial state."""
         board = np.zeros((self.height, self.width), dtype=bool)
 
         for row in range(self.height):
+            if row == 4:
+                breakpoint()
             for col in range(self.width):
                 # Check if pixel is white (alive)
                 if np.all(self.data[row, col] == [255, 255, 255]):
                     board[row, col] = True
         return board
 
-    def _parse_wormholes(
-        self, pixels: np.ndarray
-    ) -> dict[tuple[int, int], tuple[int, int]]:
-        """Parse wormhole connections from tunnel bitmap."""
-        wormholes = {}
-        color_positions = defaultdict(list)
-
-        # Group positions by color
-        for row in range(self.height):
-            for col in range(self.width):
-                color = tuple(pixels[row, col])
-                # Skip black pixels (no wormhole)
-                if color != (0, 0, 0):
-                    color_positions[color].append((row, col))
-
-        # Create bidirectional wormhole connections
-        for color, positions in color_positions.items():
-            if len(positions) == 2:
-                pos1, pos2 = positions
-                wormholes[pos1] = pos2
-                wormholes[pos2] = pos1
-            elif len(positions) > 2:
-                print(
-                    f"Warning: Color {color} has {len(positions)} positions, expected 2"
-                )
-
-        return wormholes
-
     def _map_neighbors(self) -> dict[tuple[int, int], list[tuple[int, int]]]:
         """Create coordinate map of all cell neighbors."""
-
-        """
-        NOTE:
-            - Wormholes are effectively 'folding' the board
-            - Vertical wormholes bring their top/bottom neighbors
-            - Horizontal wormholes bring their left/right neighbors
-            - There are no diagonal wormholes so cells next to wormholes will have their diagonals changed
-        """
         neighbor_map = {}
         for row in range(self.height):
             for col in range(self.width):
@@ -86,57 +67,15 @@ class Grid:
                 for row_delta in [-1, 0, 1]:
                     for col_delta in [-1, 0, 1]:
                         if row_delta == col_delta == 0:
-                            # TODO: handle if this is a wormhole entrance itself
                             continue
                         # check each cell in a 3x3 grid including current cell
                         row_neighbor = row + row_delta
                         col_neighbor = col + col_delta
-                        if (
-                            0 <= row_neighbor <= self.height
-                            and 0 <= col_neighbor <= self.width
-                        ):
+                        if self.validate_coords(row_neighbor, col_neighbor):
                             # only bother checking if neighbor coords are within board
                             actual_neighbors.append((row_neighbor, col_neighbor))
                 neighbor_map[(row, col)] = actual_neighbors
         return neighbor_map
-
-    def _apply_wormhole_transform(
-        self, row: int, col: int, dr: int, dc: int
-    ) -> tuple[int, int] | None:
-        """Apply wormhole transformation to a cell's neighbor."""
-        # Standard neighbor position
-        neighbor_row, neighbor_col = row + dr, col + dc
-
-        # Check bounds
-        if not (0 <= neighbor_row < self.height and 0 <= neighbor_col < self.width):
-            return None
-
-        # Determine wormhole precedence: top > right > bottom > left
-        wormhole_source = None
-
-        # Check for wormholes in precedence order
-        if dr < 0:  # top direction
-            if (row, col) in self.v_wormholes:
-                wormhole_source = "vertical"
-        elif dc > 0:  # right direction
-            if (row, col) in self.h_wormholes:
-                wormhole_source = "horizontal"
-        elif dr > 0:  # bottom direction
-            if (row, col) in self.v_wormholes:
-                wormhole_source = "vertical"
-        elif dc < 0:  # left direction
-            if (row, col) in self.h_wormholes:
-                wormhole_source = "horizontal"
-
-        # Apply wormhole transformation if applicable
-        if wormhole_source == "horizontal" and (row, col) in self.h_wormholes:
-            partner_row, partner_col = self.h_wormholes[(row, col)]
-            return partner_row + dr, partner_col + dc
-        elif wormhole_source == "vertical" and (row, col) in self.v_wormholes:
-            partner_row, partner_col = self.v_wormholes[(row, col)]
-            return partner_row + dr, partner_col + dc
-
-        return neighbor_row, neighbor_col
 
     def _count_live_neighbors(self, row: int, col: int) -> int:
         """Count live neighbors for a cell using the neighbor map"""
@@ -172,6 +111,8 @@ class Grid:
                         new_board[row, col] = True
 
         self.board = new_board
+        if self.debug:
+            self.frames.append(new_board)
 
     def export_board(self, file_name: str) -> None:
         """Save board state to file."""
