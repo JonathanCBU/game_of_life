@@ -1,13 +1,17 @@
 """Parse image into an array of arrays."""
 
-from PIL import Image
 import numpy as np
+from PIL import Image
+
+MIN_POP_TO_LIVE = 2
+MAX_POP_TO_LIVE = 3
+REPOP_MIN = 3
 
 
 class Grid:
     """Collection of cells that make up an image."""
 
-    def __init__(self, starting_board_file: str):
+    def __init__(self, starting_board_file: str) -> None:
         """Parse board from starting position and v/h wormholes."""
         # Initial board state
         self.starting_board_file = starting_board_file
@@ -34,7 +38,8 @@ class Grid:
     def debug(self, dbg: bool = False) -> None:
         """Debug mode setter."""
         if not isinstance(dbg, bool):
-            raise ValueError("Debug must be boolean")
+            error_message = "Debug must be boolean"
+            raise TypeError(error_message)
         self._debug = dbg
 
     def reset(self) -> None:
@@ -50,8 +55,6 @@ class Grid:
         board = np.zeros((self.height, self.width), dtype=bool)
 
         for row in range(self.height):
-            if row == 4:
-                breakpoint()
             for col in range(self.width):
                 # Check if pixel is white (alive)
                 if np.all(self.data[row, col] == [255, 255, 255]):
@@ -78,7 +81,7 @@ class Grid:
         return neighbor_map
 
     def _count_live_neighbors(self, row: int, col: int) -> int:
-        """Count live neighbors for a cell using the neighbor map"""
+        """Count live neighbors for a cell using the neighbor map."""
         count = 0
         for nr, nc in self.neighbor_map.get((row, col), []):
             if self.board[nr, nc]:
@@ -86,7 +89,7 @@ class Grid:
         return count
 
     def step(self) -> None:
-        """Perform one iteration of the Game of Life"""
+        """Perform one iteration of the Game of Life."""
         new_board = np.zeros_like(self.board)
 
         for row in range(self.height):
@@ -96,19 +99,18 @@ class Grid:
 
                 # Apply Conway's rules
                 if current_state:
-                    if live_neighbors < 2:
+                    if live_neighbors < MIN_POP_TO_LIVE:
                         # Dies by underpopulation
                         new_board[row, col] = False
-                    elif live_neighbors in [2, 3]:
+                    elif live_neighbors in [MIN_POP_TO_LIVE, MAX_POP_TO_LIVE]:
                         # Lives on
                         new_board[row, col] = True
                     else:
                         # Dies by overpopulation
                         new_board[row, col] = False
-                else:
-                    if live_neighbors == 3:
-                        # Becomes alive by reproduction
-                        new_board[row, col] = True
+                elif not current_state and live_neighbors == REPOP_MIN:
+                    # Becomes alive by reproduction
+                    new_board[row, col] = True
 
         self.board = new_board
         if self.debug:
