@@ -1,5 +1,7 @@
 """Parse image into an array of arrays."""
 
+from enum import Enum
+
 import numpy as np
 from PIL import Image
 
@@ -8,10 +10,19 @@ MAX_POP_TO_LIVE = 3
 REPOP_MIN = 3
 
 
+class GridMode(Enum):
+    """Enum for grid modes."""
+
+    NORMAL = "normal"
+    DEBUG = "debug"
+
+
 class Grid:
     """Collection of cells that make up an image."""
 
-    def __init__(self, starting_board_file: str) -> None:
+    def __init__(
+        self, starting_board_file: str, mode: GridMode = GridMode.NORMAL
+    ) -> None:
         """Parse board from starting position and v/h wormholes."""
         # Initial board state
         self.starting_board_file = starting_board_file
@@ -26,7 +37,7 @@ class Grid:
         self.neighbor_map = self.default_neighbor_map
 
         # debug
-        self._debug = False
+        self._debug = mode == GridMode.DEBUG
         self.frames = [self.board]
 
     @property
@@ -88,33 +99,34 @@ class Grid:
                 count += 1
         return count
 
-    def step(self) -> None:
+    def step(self, n: int = 1) -> None:
         """Perform one iteration of the Game of Life."""
-        new_board = np.zeros_like(self.board)
+        for _ in range(1, n):
+            new_board = np.zeros_like(self.board)
 
-        for row in range(self.height):
-            for col in range(self.width):
-                live_neighbors = self._count_live_neighbors(row, col)
-                current_state = self.board[row, col]
+            for row in range(self.height):
+                for col in range(self.width):
+                    live_neighbors = self._count_live_neighbors(row, col)
+                    current_state = self.board[row, col]
 
-                # Apply Conway's rules
-                if current_state:
-                    if live_neighbors < MIN_POP_TO_LIVE:
-                        # Dies by underpopulation
-                        new_board[row, col] = False
-                    elif live_neighbors in [MIN_POP_TO_LIVE, MAX_POP_TO_LIVE]:
-                        # Lives on
+                    # Apply Conway's rules
+                    if current_state:
+                        if live_neighbors < MIN_POP_TO_LIVE:
+                            # Dies by underpopulation
+                            new_board[row, col] = False
+                        elif live_neighbors in [MIN_POP_TO_LIVE, MAX_POP_TO_LIVE]:
+                            # Lives on
+                            new_board[row, col] = True
+                        else:
+                            # Dies by overpopulation
+                            new_board[row, col] = False
+                    elif not current_state and live_neighbors == REPOP_MIN:
+                        # Becomes alive by reproduction
                         new_board[row, col] = True
-                    else:
-                        # Dies by overpopulation
-                        new_board[row, col] = False
-                elif not current_state and live_neighbors == REPOP_MIN:
-                    # Becomes alive by reproduction
-                    new_board[row, col] = True
 
-        self.board = new_board
-        if self.debug:
-            self.frames.append(new_board)
+            self.board = new_board
+            if self._debug:
+                self.frames.append(new_board)
 
     def export_board(self, file_name: str) -> None:
         """Save board state to file."""
